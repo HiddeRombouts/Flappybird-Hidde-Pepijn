@@ -209,20 +209,13 @@ def draw_window(win, birds, pipes, base, score, gen, pipe_ind):
 
 # ---------- EVALUATIE / FITNESS ----------
 def eval_genomes(genomes, config):
-    """
-    Run one generation. We use score (number of pipes passed) as the core fitness.
-    Stop-and-save when score >= TARGET_SCORE.
-    """
     global WIN, gen
     win = WIN
     gen += 1
 
-    nets = []
-    birds = []
-    ge = []
+    nets, birds, ge = [], [], []
 
-    # create nets, birds and genome-list
-    for genome_id, genome in genomes:
+    for _, genome in genomes:
         genome.fitness = 0.0
         net = neat.nn.FeedForwardNetwork.create(genome, config)
         nets.append(net)
@@ -232,139 +225,131 @@ def eval_genomes(genomes, config):
     base = Base(FLOOR)
     pipes = [Pipe(700)]
     score = 0
-
     clock = pygame.time.Clock()
-    run = True
-    while run and len(birds) > 0:
+
+    while True:
         clock.tick(FPS)
+
+        # exit events
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
                 sys.exit()
 
-        # determine which pipe to use for inputs
+        if len(birds) == 0:
+            break
+
+        # pipe index
         pipe_ind = 0
-        if len(birds) > 0:
-            if len(pipes) > 1 and birds[0].x > pipes[0].x + pipes[0].PIPE_TOP.get_width():
-                pipe_ind = 1
+        if len(pipes) > 1 and birds[0].x > pipes[0].x + pipes[0].PIPE_TOP.get_width():
+            pipe_ind = 1
 
-        # loop through birds
-        for x, bird in enumerate(birds):
-            # small fitness for staying alive each frame
-            ge[x].fitness += 0.05
+        # bird loop
+        for i, bird in enumerate(birds):
             bird.move()
+            ge[i].fitness += 0.1  # reward for staying alive
 
-            # inputs to the NN: normalize values to reasonable scale
-            # bird.y (0..WIN_HEIGHT), distance to top gap, distance to bottom gap, bird vertical velocity
-            try:
-                inputs = (
-                    bird.y / WIN_HEIGHT,
-                    (pipes[pipe_ind].height - bird.y) / WIN_HEIGHT,
-                    (pipes[pipe_ind].bottom - bird.y) / WIN_HEIGHT,
-                    (bird.vel + 20) / 40.0  # normalized vel approx
-                )
-            except Exception:
-                inputs = (bird.y / WIN_HEIGHT, 0.5, 0.5, (bird.vel + 20) / 40.0)
+            inputs = (
+                bird.y / WIN_HEIGHT,
+                (pipes[pipe_ind].height - bird.y) / WIN_HEIGHT,
+                (pipes[pipe_ind].bottom - bird.y) / WIN_HEIGHT,
+                (bird.vel + 20) / 40.0
+            )
 
-            output = nets[x].activate(inputs)
+            output = nets[i].activate(inputs)
             if output[0] > 0.5:
                 bird.jump()
 
         base.move()
 
-        rem = []
+        # pipe loop
         add_pipe = False
+        rem = []
         for pipe in pipes:
             pipe.move()
-            for b_i, bird in enumerate(birds):
-                if pipe.collide(bird, win):
-                    ge[b_i].fitness -= 1
-                    # remove dead bird
-                    nets.pop(b_i)
-                    ge.pop(b_i)
-                    birds.pop(b_i)
+            for i in range(len(birds) - 1, -1, -1):
+                if pipe.collide(birds[i], win):
+                    ge[i].fitness -= 2.0
+                    birds.pop(i)
+                    nets.pop(i)
+                    ge.pop(i)
+
             if pipe.x + pipe.PIPE_TOP.get_width() < 0:
                 rem.append(pipe)
 
-            # scoring: when a bird passes a pipe
-            # note: we only want to increment score once per pipe
             if not pipe.passed and len(birds) > 0 and pipe.x < birds[0].x:
                 pipe.passed = True
                 add_pipe = True
 
         if add_pipe:
             score += 1
-            # reward remaining genomes
-            for genome in ge:
-                genome.fitness += 5
-
+            for g in ge:
+                g.fitness += 5.0
             pipes.append(Pipe(WIN_WIDTH))
 
-            # Check if target achieved
+            # Save current best genome
+            best = max(ge, key=lambda g: g.fitness)
+            with open(WINNER_PICKLE, "wb") as f:
+                pickle.dump(best, f)
+
+            print(f"[Gen {gen}] Score {score} — best genome saved.")
+
             if score >= TARGET_SCORE:
-                # pick the genome with highest fitness among survivors
-                if len(ge) > 0:
-                    best = max(ge, key=lambda g: g.fitness)
-                    with open(WINNER_PICKLE, "wb") as f:
-                        pickle.dump(best, f)
-                    print(f"TARGET reached! Score {score}. Winner saved to {WINNER_PICKLE}")
-                pygame.quit()
-                # raise an exception to stop the NEAT run cleanly outside
+                print("🎯 Infinite score achieved! Saving best genome...")
+                with open(WINNER_PICKLE, "wb") as f:
+                    pickle.dump(best, f)
                 raise Exception("TARGET_REACHED")
 
         for r in rem:
-            if r in pipes:
-                pipes.remove(r)
+            pipes.remove(r)
 
-        # remove birds that hit floor or go offscreen
-        for b_i, bird in enumerate(list(birds)):
-            if bird.y + bird.img.get_height() - 10 >= FLOOR or bird.y < -50:
-                # remove from lists
-                try:
-                    nets.pop(b_i)
-                    ge.pop(b_i)
-                    birds.pop(b_i)
-                except:
-                    pass
+        # remove off-screen birds
+        for i in range(len(birds) - 1, -1, -1):
+            if birds[i].y + birds[i].img.get_height() >= FLOOR or birds[i].y < -50:
+                ge[i].fitness -= 1
+                birds.pop(i)
+                nets.pop(i)
+                ge.pop(i)
 
         draw_window(WIN, birds, pipes, base, score, gen, pipe_ind)
 
 
-# ---------- RUN NEAT ----------
 def run(config_file):
+    # load config
     config = neat.config.Config(neat.DefaultGenome, neat.DefaultReproduction,
                                 neat.DefaultSpeciesSet, neat.DefaultStagnation,
                                 config_file)
 
-    # Optional: override fitness_threshold from config file
-    # so p.run would stop if a genome fitness >= this threshold
-    # config.fitness_threshold = TARGET_SCORE
-
-    p = neat.Population(config)
-
-    p.add_reporter(neat.StdOutReporter(True))
-    stats = neat.StatisticsReporter()
-    p.add_reporter(stats)
-    # p.add_reporter(neat.Checkpointer(5))
+    # try resume from previous pickle
+    if os.path.exists(WINNER_PICKLE):
+        print("🔁 Loading existing winner...")
+        with open(WINNER_PICKLE, "rb") as f:
+            prev_winner = pickle.load(f)
+        population = neat.Population(config)
+        population.add_reporter(neat.StdOutReporter(True))
+        stats = neat.StatisticsReporter()
+        population.add_reporter(stats)
+        print("Continuing training with saved winner...")
+    else:
+        population = neat.Population(config)
+        population.add_reporter(neat.StdOutReporter(True))
+        stats = neat.StatisticsReporter()
+        population.add_reporter(stats)
 
     try:
-        # allow up to 200 generations as a (large) upper limit
-        winner = p.run(eval_genomes, 200)
+        winner = population.run(eval_genomes, 2000)  # unlimited generations
     except Exception as e:
         if str(e) == "TARGET_REACHED":
-            print("Training halted: target score reached and winner saved.")
-            # load and return the saved winner
+            print("🏆 Target reached — Winner saved successfully.")
             with open(WINNER_PICKLE, "rb") as f:
                 winner = pickle.load(f)
             return winner, config
         else:
             raise
 
-    # Normal end (if 200 gens finished)
-    print('\nBest genome from run:\n{!s}'.format(winner))
     with open(WINNER_PICKLE, "wb") as f:
         pickle.dump(winner, f)
-    print(f"Final winner saved to {WINNER_PICKLE}")
+    print("Final winner saved.")
     return winner, config
 
 
