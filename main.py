@@ -10,8 +10,7 @@ import random
 import os
 import time
 import neat
-#import visualize
-#import pickle
+import pickle
 pygame.font.init()  # init font
 
 WIN_WIDTH = 600
@@ -363,7 +362,7 @@ def eval_genomes(genomes, config):
                 run = False
                 pygame.quit()
                 quit()
-                break
+            break
 
         pipe_ind = 0
         if len(birds) > 0:
@@ -372,7 +371,7 @@ def eval_genomes(genomes, config):
                 pipe_ind = 1
 
         for x, bird in enumerate(birds):
-            ge[x].fitness += 0.1
+            ge[x].fitness += 0.2
             bird.move()
 
             output = nets[birds.index(bird)].activate(
@@ -381,7 +380,11 @@ def eval_genomes(genomes, config):
 
             if output[0] > 0.5:
                 bird.jump()
-
+            if bird.y > FLOOR - 50:
+                ge[x].fitness -= 3
+            elif bird.y < 50:
+                ge[x].fitness -= 3
+    
         base.move()
 
         rem = []
@@ -407,7 +410,7 @@ def eval_genomes(genomes, config):
             score += 1
 
             for genome in ge:
-                genome.fitness += 5
+                genome.fitness += 15
 
             pipes.append(Pipe(WIN_WIDTH))
 
@@ -449,25 +452,17 @@ def run(config_file):
     print('\nBest genome:\n{!s}'.format(winner))
 
     # Save the winner genome to a pickle .pkl file
-    import pickle
     with open("winner.pkl", "wb") as f:
         pickle.dump(winner, f)
     print("Winner saved to winner.pkl")
 
-    # show final stats
-    print('\nBest genome:\n{!s}'.format(winner))
-
-    # Save the winner genome to a pickle .pkl file
-    #with open("winner.pkl", "wb") as f:
-    #    pickle.dump(winner, f)
-    #
+    
     #to play the endgame with only the best bird e.g.
     #play_with_best_bird("winner.pkl", config)
     return winner, config
 
 
 def play_with_best_bird(pkl_file, config):
-    import pickle
     with open(pkl_file, "rb") as f:
         winner = pickle.load(f)
 
@@ -522,7 +517,7 @@ def play_with_best_bird(pkl_file, config):
             pipes.remove(r)
 
         if bird.y + bird.img.get_height() - 10 >= FLOOR or bird.y < -50:
-            print("Crashed to floor/ceiling, score:", score)
+            print("Crashed to floor/ceiling, score:", score) #??
             run = False
 
         draw_window(WIN, [bird], pipes, base, score, 0, pipe_ind)
