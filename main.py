@@ -542,7 +542,7 @@ if __name__ == '__main__':
     winner, config = run(config_path)
     
     # Play with the best bird after training
-    print("\n🎮 Now playing with the best bird!")
+    print("Now playing with the best bird!")
     play_with_best_bird("winner.pkl", config)
     
     pygame.quit()
