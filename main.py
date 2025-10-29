@@ -540,6 +540,6 @@ if __name__ == '__main__':
     config_path = os.path.join(local_dir, 'config-feedforward.txt')
     run(config_path)
     # Uncomment om na training te spelen met de beste vogel
-config = neat.config.Config(neat.DefaultGenome, neat.DefaultReproduction, neat.DefaultSpeciesSet, neat.DefaultStagnation,config_path)
-play_with_best_bird("winner.pkl", config)
+#config = neat.config.Config(neat.DefaultGenome, neat.DefaultReproduction, neat.DefaultSpeciesSet, neat.DefaultStagnation,config_path)
+#play_with_best_bird("winner.pkl", config)
 pygame.quit()
