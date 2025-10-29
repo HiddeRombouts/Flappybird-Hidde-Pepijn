@@ -349,7 +349,7 @@ def run(config_file):
     return winner, config
 
 
- def play_with_best_bird(pkl_file, config):
+def play_with_best_bird(pkl_file, config):
     with open(pkl_file, "rb") as f:
         winner = pickle.load(f)
 
