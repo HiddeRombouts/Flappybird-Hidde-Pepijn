@@ -371,7 +371,7 @@ def eval_genomes(genomes, config):
                 pipe_ind = 1
 
         for x, bird in enumerate(birds):
-            ge[x].fitness += 0.2
+            ge[x].fitness += 0.3
             bird.move()
 
             output = nets[birds.index(bird)].activate(
@@ -381,9 +381,9 @@ def eval_genomes(genomes, config):
             if output[0] > 0.5:
                 bird.jump()
             if bird.y > FLOOR - 50:
-                ge[x].fitness -= 3
+                ge[x].fitness -= 5
             elif bird.y < 50:
-                ge[x].fitness -= 3
+                ge[x].fitness -= 5
     
         base.move()
 
@@ -410,7 +410,7 @@ def eval_genomes(genomes, config):
             score += 1
 
             for genome in ge:
-                genome.fitness += 15
+                genome.fitness += 20
 
             pipes.append(Pipe(WIN_WIDTH))
 
@@ -443,7 +443,6 @@ def run(config_file):
     p.add_reporter(neat.StdOutReporter(True))
     stats = neat.StatisticsReporter()
     p.add_reporter(stats)
-    p.add_reporter(neat.Checkpointer(5))
 
     # Run for up to 1000 generations (max). NEAT stopt eerder als fitness_threshold bereikt is.
     winner = p.run(eval_genomes, 1000)
